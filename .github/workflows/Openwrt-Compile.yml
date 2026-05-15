@@ -1,4 +1,4 @@
-name: Compile
+name: Openwrt-Compile
 
 on:
   workflow_dispatch
@@ -93,7 +93,7 @@ jobs:
       run: |
         TARGET_DEVICE_ARCH="$(grep "^CONFIG_TARGET_.*_.*=y$" ".config" | head -n 1 | sed 's/^CONFIG_TARGET_//g' | awk -F '_' '{print $1}')"
         echo "TARGET_DEVICE_ARCH=${TARGET_DEVICE_ARCH}-3328" >>$GITHUB_ENV
-        latest_release="$(curl -s https://github.com/openwrt/openwrt/tags | grep -Eo "v[0-9\.]+\-*r*c*[0-9]*.tar.gz" | sed -n '/23/p' | sed -n 1p | sed 's/.tar.gz//g' | sed 's/v//g')"
+        latest_release="$(curl -s https://github.com/openwrt/openwrt/tags | grep -Eo "v[0-9\.]+\-*r*c*[0-9]*.tar.gz" | sed -n '/[2-9][5-9]/p' | sed -n 1p | sed 's/.tar.gz//g' | sed 's/v//g')"
         echo "latest_release=${latest_release}" >>$GITHUB_ENV
 
     - name: Cache
@@ -106,13 +106,13 @@ jobs:
       working-directory: ${{ github.workspace }}/openwrt
       run: |
         make download -j50
+        make -j$(($(nproc) + 1)) package/network/utils/nftables/refresh V=s
 
     - name: Compile Openwrt
       working-directory: ${{ github.workspace }}/openwrt
       id: compileopenwrt
       continue-on-error: true
       run: |
-        #echo | make kernel_oldconfig -j$(($(nproc) + 1)) 
         IGNORE_ERRORS=1 make -j$(($(nproc) + 1))
         echo $?
 
@@ -135,7 +135,8 @@ jobs:
         gzip -d *.gz && exit 0
         gzip --best *.img
         ls -Ahl
-        sha256sum openwrt*r2s* | tee R2S-OPENWRT-$(date +%Y-%m-%d).sha256sum
+        mv openwrt-rockchip-armv8-friendlyarm_nanopi-r2s-squashfs-sysupgrade.img.gz nanopi-r2s-squashfs-sysupgrade.img.gz
+        mv openwrt-rockchip-armv8-friendlyarm_nanopi-r2s-ext4-sysupgrade.img.gz nanopi-r2s-ext4-sysupgrade.img.gz
         ls -Ahl
 
     - name: Upload Artifact
@@ -148,8 +149,8 @@ jobs:
       uses: softprops/action-gh-release@v2
       with:
         files: ./artifact/*
-        tag_name: R2S-OpenWrt-${{ github.run_number }}
-        name: R2S OpenWrt Release ${{ github.run_number }}
+        tag_name: R2S-OpenWrt-${{ env.latest_release }}
+        name: R2S-OpenWrt-${{ env.latest_release }}
         body: Auto-generated release for OpenWrt build.
 
     - name: Print Disk Space After
